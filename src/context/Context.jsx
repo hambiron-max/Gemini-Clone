@@ -1,16 +1,40 @@
-import {createContext, useState} from "react";
-import runChat from "../config/gemini";
+import {createContext, useEffect, useState} from "react";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "../config/firebase.js";
+import runGemini from "../config/gemini";
+import runGroq from "../config/groq";
+import {addChatPrompt, loadChatHistory, saveChatHistory, saveChatToFirestore, loadChatsFromFirestore} from "../services/db";
 
 export const Context = createContext();
 
 const ContextProvider = (props) => {
 
+    const [user, setUser] = useState(null);
+    const [selectedModel, setSelectedModel] = useState("gemini");
+    const [showSettings, setShowSettings] = useState(false);
     const [input, setInput] = useState("");
     const [recentPrompt, setRecentPrompt] = useState("");
     const [prevPrompts, setPrevPrompts] = useState([]);
     const [showResult, setShowResult] = useState(false);
     const [loading, setLoading] = useState(false);
     const [resultData, setResultData] = useState("");
+
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+            setUser(currentUser);
+            if (currentUser) {
+                const { prompts } = await loadChatsFromFirestore(currentUser.uid);
+                setPrevPrompts(prompts.slice(0, 12));
+            } else {
+                setPrevPrompts(loadChatHistory());
+            }
+        });
+        return () => unsubscribe();
+    }, []);
+
+    useEffect(() => {
+        saveChatHistory(prevPrompts);
+    }, [prevPrompts]);
 
     const delayPara = (index, nextWord) => {
         setTimeout(function () {
@@ -21,22 +45,41 @@ const ContextProvider = (props) => {
     const newChat = () => {
         setLoading(false);
         setShowResult(false);
+        setResultData("");
+        setInput("");
     }
 
-    const onSent = async (prompt) => {
+    const runModel = async (prompt) => {
+        if (selectedModel === "groq") {
+            return await runGroq(prompt);
+        }
+        return await runGemini(prompt);
+    };
 
+    const onSent = async (prompt) => {
 
         setResultData("");
         setLoading(true);
         setShowResult(true);
         let response;
+        const usedPrompt = prompt !== undefined ? prompt : input.trim();
         if (prompt !== undefined) {
-            response = await runChat(prompt);
+            response = await runModel(prompt);
             setRecentPrompt(prompt);
+            setPrevPrompts(prev => addChatPrompt(prev, prompt));
         } else {
-            setPrevPrompts(prev => [...prev, input]);
-            setRecentPrompt(input);
-            response = await runChat(input);
+            if (!usedPrompt) {
+                setLoading(false);
+                setShowResult(false);
+                return;
+            }
+            setPrevPrompts(prev => addChatPrompt(prev, usedPrompt));
+            setRecentPrompt(usedPrompt);
+            response = await runModel(usedPrompt);
+        }
+
+        if (user) {
+            saveChatToFirestore(user.uid, usedPrompt, response);
         }
 
         let responseArray = response.split("**");
@@ -60,6 +103,11 @@ const ContextProvider = (props) => {
     }
 
     const contextValue = {
+        user,
+        selectedModel,
+        setSelectedModel,
+        showSettings,
+        setShowSettings,
         prevPrompts,
         setPrevPrompts,
         onSent,

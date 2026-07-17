@@ -5,7 +5,7 @@ import {Context} from '../../context/Context';
 
 const Sidebar = () => {
     const [extended, setExtended] = useState(false);
-    const {onSent, prevPrompts, setRecentPrompt, newChat} = useContext(Context);
+    const {onSent, prevPrompts, setRecentPrompt, newChat, setShowSettings} = useContext(Context);
 
     const loadPrompt = async (prompt) => {
         setRecentPrompt(prompt)
@@ -46,7 +46,7 @@ const Sidebar = () => {
                     <img src={assets.history_icon} alt="History Icon"/>
                     <p className={`fade ${extended ? 'block' : 'none'}`}>Activity</p>
                 </div>
-                <div className="bottom-item recent-entry">
+                <div className="bottom-item recent-entry" onClick={() => setShowSettings(true)}>
                     <img src={assets.setting_icon} alt="Settings Icon"/>
                     <p className={`fade ${extended ? 'block' : 'none'}`}>Settings</p>
                 </div>

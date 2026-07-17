@@ -4,7 +4,7 @@ import {assets} from "../../assets/assets.js";
 import {Context} from "../../context/Context.jsx";
 
 const Main = () => {
-    const {onSent, recentPrompt, showResult, loading, resultData, setInput, input} = useContext(Context);
+    const {user, onSent, recentPrompt, showResult, loading, resultData, setInput, input} = useContext(Context);
     const resultRef = useRef(null);
     const [rows, setRows] = useState(1);
 
@@ -31,15 +31,15 @@ const Main = () => {
     return (
         <main className="main">
             <nav className="nav">
-                <p>Gemini</p>
-                <img src={assets.user_icon} alt=""/>
+                <p>my personal sec</p>
+                <img src={user?.photoURL || assets.user_icon} alt=""/>
             </nav>
             <div className="main-container">
 
                 {!showResult
                     ? <>
                         <div className="greet">
-                            <p><span>Hello, Dev</span></p>
+                            <p><span>Hello, {user?.displayName || "Dev"}</span></p>
                             <p>How can I help you today?</p>
                         </div>
                         <div className="cards">
@@ -67,7 +67,7 @@ const Main = () => {
                     :
                     <div className='result' ref={resultRef}>
                         <div className="result-title">
-                            <img src={assets.user_icon} alt=""/>
+                            <img src={user?.photoURL || assets.user_icon} alt=""/>
                             <p>{recentPrompt}</p>
                         </div>
                         <div className="result-data">
@@ -103,8 +103,8 @@ const Main = () => {
                         </div>
                     </div>
                     <p className="bottom-info">
-                        Gemini may display inaccurate info, including about people, so double-check its responses.
-                        <a href="#">Your privacy and Gemini Apps</a>
+                        HAMBIR may display inaccurate info, including about people, so double-check its responses.
+                        <a href="#">Your privacy and HAMBIR Apps</a>
                     </p>
                 </div>
             </div>
