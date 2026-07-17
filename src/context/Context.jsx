@@ -7,6 +7,36 @@ import {addChatPrompt, loadChatHistory, saveChatHistory, saveChatToFirestore, lo
 
 export const Context = createContext();
 
+const CHAT_CACHE_KEY = "hambir-chat-cache";
+
+const loadChatCache = () => {
+    try {
+        const saved = localStorage.getItem(CHAT_CACHE_KEY);
+        return saved ? JSON.parse(saved) : {};
+    } catch {
+        return {};
+    }
+};
+
+const saveChatCache = (cache) => {
+    try {
+        localStorage.setItem(CHAT_CACHE_KEY, JSON.stringify(cache));
+    } catch {}
+};
+
+const formatResponse = (text) => {
+    const parts = text.split("**");
+    let result = "";
+    for (let i = 0; i < parts.length; i++) {
+        if (i === 0 || i % 2 !== 1) {
+            result += parts[i];
+        } else {
+            result += "<b>" + parts[i] + "</b>";
+        }
+    }
+    return result.split("*").join("</br>");
+};
+
 const ContextProvider = (props) => {
 
     const [user, setUser] = useState(null);
@@ -18,13 +48,30 @@ const ContextProvider = (props) => {
     const [showResult, setShowResult] = useState(false);
     const [loading, setLoading] = useState(false);
     const [resultData, setResultData] = useState("");
+    const [chatCache, setChatCache] = useState({});
+
+    useEffect(() => {
+        const cached = loadChatCache();
+        setChatCache(cached);
+    }, []);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
             setUser(currentUser);
             if (currentUser) {
-                const { prompts } = await loadChatsFromFirestore(currentUser.uid);
+                const { chats } = await loadChatsFromFirestore(currentUser.uid);
+                const prompts = chats.map(c => c.prompt).filter(Boolean);
                 setPrevPrompts(prompts.slice(0, 12));
+                const history = {};
+                chats.forEach(c => {
+                    if (c.prompt) {
+                        history[c.prompt] = {
+                            rawResponse: c.response,
+                            formattedResponse: formatResponse(c.response)
+                        };
+                    }
+                });
+                setChatCache(prev => ({ ...prev, ...history }));
             } else {
                 setPrevPrompts(loadChatHistory());
             }
@@ -35,6 +82,10 @@ const ContextProvider = (props) => {
     useEffect(() => {
         saveChatHistory(prevPrompts);
     }, [prevPrompts]);
+
+    useEffect(() => {
+        saveChatCache(chatCache);
+    }, [chatCache]);
 
     const delayPara = (index, nextWord) => {
         setTimeout(function () {
@@ -54,6 +105,16 @@ const ContextProvider = (props) => {
             return await runGroq(prompt);
         }
         return await runGemini(prompt);
+    };
+
+    const loadChat = (prompt) => {
+        const cached = chatCache[prompt];
+        if (cached) {
+            setRecentPrompt(prompt);
+            setResultData(cached.formattedResponse);
+            setShowResult(true);
+            setLoading(false);
+        }
     };
 
     const onSent = async (prompt) => {
@@ -82,20 +143,12 @@ const ContextProvider = (props) => {
             saveChatToFirestore(user.uid, usedPrompt, response);
         }
 
-        let responseArray = response.split("**");
-        let newResponse = "";
-        for (let i = 0; i < responseArray.length; i++) {
-            if (i === 0 || i % 2 !== 1) {
-                newResponse += responseArray[i];
-            } else {
-                newResponse += "<b>" + responseArray[i] + "</b>"
-            }
+        const formatted = formatResponse(response);
+        setChatCache(prev => ({ ...prev, [usedPrompt]: { rawResponse: response, formattedResponse: formatted } }));
 
-        }
-        let newResponse2 = newResponse.split("*").join("</br>");
-        let newResponseArray = newResponse2.split(" ");
-        for (let i = 0; i < newResponseArray.length; i++) {
-            const nextWord = newResponseArray[i];
+        let responseArray = formatted.split(" ");
+        for (let i = 0; i < responseArray.length; i++) {
+            const nextWord = responseArray[i];
             delayPara(i, nextWord + " ");
         }
         setLoading(false);
@@ -111,6 +164,7 @@ const ContextProvider = (props) => {
         prevPrompts,
         setPrevPrompts,
         onSent,
+        loadChat,
         recentPrompt,
         setRecentPrompt,
         showResult,
